@@ -97,7 +97,7 @@ export function BlockLimbo({position =[0, 0, 0]})
         const time = state.clock.getElapsedTime()
         
         const y = Math.sin(time+timeOffset)+1.15
-        obstacle.current.setNextKinematicTranslation({x:position[2], y: y, z:position[2]})
+        obstacle.current.setNextKinematicTranslation({x:position[0], y: y, z:position[2]})
     })
 
     return <group position = {position}>
