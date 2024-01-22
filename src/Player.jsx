@@ -3,13 +3,27 @@ import {useRapier, RigidBody} from '@react-three/rapier'
 import {useFrame} from '@react-three/fiber'
 import {useKeyboardControls} from '@react-three/drei'
 import {useState, useEffect, useRef} from 'react'
-
+import useGame from './stores/useGame.jsx'
 
 export default function Player(){
     const body = useRef()
     const [subscribeKeys, getKeys] = useKeyboardControls()
     const {rapier, world} = useRapier()
+
+    const [smoothedCameraPosition] = useState(()=> new THREE.Vector3(10, 10, 10))
+    const [smoothedCameraTarget] = useState(()=> new THREE.Vector3())
     
+    const start = useGame((state)=>state.start)
+    const end = useGame((state)=>state.end)
+    const restart = useGame((state)=> state.restart)
+    const blocksCount = useGame((state)=>state.blocksCount)
+    
+    const reset= () =>
+    {
+        body.current.setTranslation({x:0, y:1, z:0})
+        body.current.setLinvel({x:0, y:0, z:0})
+        body.current.setAngvel({x:0, y:0, z:0})
+    }
     const jump=()=>
     {
         const origin = body.current.translation()
@@ -24,6 +38,20 @@ export default function Player(){
     }
 
     useEffect(()=>{
+        const unsubscribeReset = useGame.subscribe(
+            (state) =>  state.phase,
+            (value) =>
+            {
+                if(value==='ready')
+                    reset()
+            }
+        )
+        useGame.subscribe(
+            (state) => state.phase,
+            (value) =>{
+                console.log('phase changes to', value)
+            }
+        )
         const unsubscribeJump = subscribeKeys(
             (state)=> state.jump,
             (value)=>
@@ -32,9 +60,24 @@ export default function Player(){
                     jump()
             }
         )
+        const unsubscribeAny = subscribeKeys(
+            () =>
+            {
+                start()
+            }
+        )
 
+        subscribeKeys(
+            ()=>
+            {
+                console.log('any key down')
+            }
+        )
+        
         return () =>{
+            unsubscribeReset()
             unsubscribeJump()
+            unsubscribeAny()
         }
     }, [])
 
@@ -70,6 +113,31 @@ export default function Player(){
 
         body.current.applyImpulse(impulse)
         body.current.applyTorqueImpulse(torque)
+
+        const bodyPosition = body.current.translation()
+        const cameraPosition = new THREE.Vector3()
+        cameraPosition.copy(bodyPosition)
+        cameraPosition.z += 2.25
+        cameraPosition.y+= 0.65
+
+        const cameraTarget = new THREE.Vector3()
+        cameraTarget.copy(bodyPosition)
+        cameraTarget.y += 0.25
+
+        state.camera.position.copy(cameraPosition)
+        state.camera.lookAt(cameraTarget)
+
+        smoothedCameraPosition.lerp(cameraPosition, 5*delta)
+        smoothedCameraTarget.lerp(cameraTarget, 5*delta)
+
+        state.camera.position.copy(smoothedCameraPosition)
+        state.camera.lookAt(smoothedCameraTarget)
+
+        /* Phases*/
+        if(bodyPosition.z < - (blocksCount*4+2))
+            end()
+        if(bodyPosition.y<-4)
+            restart()
     })
     
     return <RigidBody
